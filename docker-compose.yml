@@ -1,24 +1,56 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
 
+
+  # Streamlit - user interface
   streamlit:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/streamlit/Dockerfile
     command: streamlit run streamlit_app/app.py --server.address=0.0.0.0 --server.port=8501
     ports:
-      - "8501:8501"
+      - "${STREAMLIT_PORT:-8501}:8501"
     volumes:
       - .:/app
     environment:
-      API_URL: http://api:8000
+      - API_URL=${API_URL:-http://api:8000}
     depends_on:
       - api
+    restart: unless-stopped
+
+  # MLflow - experiment tracking
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/mlflow/Dockerfile
+    command: >
+      mlflow server
+        --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow}@postgres:5432/${POSTGRES_DB:-mlflow}
+        --default-artifact-root /mlflow/artifacts
+        --host 0.0.0.0
+        --port 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # PostgreSQL - MLflow backend store
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-mlflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mlflow}
+      - POSTGRES_DB=${POSTGRES_DB:-mlflow}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  
+
+volumes:
+  postgres_data:
+  mlflow_artifacts:
