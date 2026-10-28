@@ -1,0 +1,28 @@
+# GPU image for YOLOv8 training with PyTorch/Ultralytics
+# Built to run on Vast.ai or Google Colab
+# Base: official PyTorch GPU image (CUDA 12.1)
+
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime
+
+WORKDIR /workspace
+
+# Install system packages needed by OpenCV
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install YOLOv8 and supporting packages
+RUN pip install --no-cache-dir \
+    ultralytics==8.2.0 \
+    mlflow==3.14.0 \
+    scikit-learn \
+    matplotlib \
+    seaborn \
+    psycopg2-binary
+
+# Copy only detection training code
+COPY notebooks/ /workspace/notebooks/
+COPY data/ /workspace/data/
+
+CMD ["/bin/bash"]

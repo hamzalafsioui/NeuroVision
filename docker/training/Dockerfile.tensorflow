@@ -1,0 +1,28 @@
+# GPU image for InceptionV3 training with TensorFlow
+# Built to run on Vast.ai or Kaggle/Colab
+# Base: official TensorFlow GPU image (CUDA 12.1)
+
+FROM tensorflow/tensorflow:2.16.1-gpu
+
+WORKDIR /workspace
+
+# Install extra packages needed for training
+RUN pip install --no-cache-dir \
+    mlflow==3.14.0 \
+    scikit-learn \
+    matplotlib \
+    seaborn \
+    pillow \
+    opencv-python-headless \
+    albumentations \
+    psycopg2-binary
+
+# Copy only training code, not the whole project
+COPY notebooks/ /workspace/notebooks/
+COPY data/ /workspace/data/
+
+# Expose MLflow port so you can track from inside the container
+EXPOSE 5000
+
+# Default command: launch a bash shell so you can run training manually
+CMD ["/bin/bash"]

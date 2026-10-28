@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
-    mlflow==3.14.0 \
+    "mlflow[auth]==3.14.0" \
     psycopg2-binary \
     boto3
 

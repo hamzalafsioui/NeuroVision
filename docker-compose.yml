@@ -1,5 +1,21 @@
 services:
 
+  # FastAPI - serves classification and detection endpoints
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - .:/app
+      - ./models:/app/models
+    environment:
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    depends_on:
+      - mlflow
+    restart: unless-stopped
 
   # Streamlit - user interface
   streamlit:
@@ -18,6 +34,7 @@ services:
     restart: unless-stopped
 
   # MLflow - experiment tracking
+  
   mlflow:
     build:
       context: .
@@ -25,16 +42,27 @@ services:
     command: >
       mlflow server
         --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow}@postgres:5432/${POSTGRES_DB:-mlflow}
-        --default-artifact-root /mlflow/artifacts
+        --serve-artifacts
+        --artifacts-destination /mlflow/artifacts
         --host 0.0.0.0
         --port 5000
+        --app-name basic-auth
+        --allowed-hosts "*.trycloudflare.com,localhost:5000,127.0.0.1:5000"
+      
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
+    environment:
+      MLFLOW_AUTH_CONFIG_PATH: /etc/mlflow/basic_auth.ini
+      MLFLOW_FLASK_SERVER_SECRET_KEY: ${MLFLOW_SECRET_KEY}
+      MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_ADMIN_PASSWORD}
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
+      - mlflow_auth:/mlflow/auth
+      - ./docker/mlflow/basic_auth.ini:/etc/mlflow/basic_auth.ini:ro
     depends_on:
       - postgres
     restart: unless-stopped
+
 
   # PostgreSQL - MLflow backend store
   postgres:
@@ -49,8 +77,33 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
-  
+  # Apache Airflow - pipeline orchestration
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@neurovision.local &&
+               airflow webserver"
+    ports:
+      - "${AIRFLOW_PORT:-8080}:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - .:/app
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR:-LocalExecutor}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    depends_on:
+      - postgres
+      - mlflow
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   mlflow_artifacts:
+  mlflow_auth:
