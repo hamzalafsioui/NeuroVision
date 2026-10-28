@@ -1,7 +1,32 @@
+# Secrets
 .env
+
+# Python cache
 __pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Jupyter checkpoints
 .ipynb_checkpoints/
-data/
+
+# Data (too large for git - use Kaggle datasets or DVC)
+data/raw/
+data/prepared/
+
+# Trained models (download from Kaggle/Colab outputs)
 models/
+
+# Training outputs
 outputs/
+
+# MLflow runs (generated locally)
 mlruns/
+
+# Airflow logs
+airflow/logs/
+
+# OS files
+.DS_Store
+
+*ini
