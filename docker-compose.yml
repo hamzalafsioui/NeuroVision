@@ -13,8 +13,12 @@ services:
       - ./models:/app/models
     environment:
       - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      - KERAS_HOME=/app/.keras
+      - TF_ENABLE_ONEDNN_OPTS=0
     depends_on:
       - mlflow
+    networks:
+      - neurovision_network
     restart: unless-stopped
 
   # Streamlit - user interface
@@ -31,24 +35,24 @@ services:
       - API_URL=${API_URL:-http://api:8000}
     depends_on:
       - api
+    networks:
+      - neurovision_network
     restart: unless-stopped
 
   # MLflow - experiment tracking
-  
   mlflow:
     build:
       context: .
       dockerfile: docker/mlflow/Dockerfile
     command: >
       mlflow server
-        --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-mlflow}:${POSTGRES_PASSWORD:-mlflow}@postgres:5432/${POSTGRES_DB:-mlflow}
+        --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-neurovision}:${POSTGRES_PASSWORD:-neurovision}@postgres:5432/${POSTGRES_DB:-neurovision}
         --serve-artifacts
         --artifacts-destination /mlflow/artifacts
         --host 0.0.0.0
         --port 5000
         --app-name basic-auth
         --allowed-hosts "*.trycloudflare.com,localhost:5000,127.0.0.1:5000"
-      
     ports:
       - "127.0.0.1:5000:5000"
     environment:
@@ -60,21 +64,30 @@ services:
       - mlflow_auth:/mlflow/auth
       - ./docker/mlflow/basic_auth.ini:/etc/mlflow/basic_auth.ini:ro
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    networks:
+      - neurovision_network
     restart: unless-stopped
 
-
-  # PostgreSQL - MLflow backend store
+  # PostgreSQL - MLflow and Airflow backend store
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-mlflow}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mlflow}
-      - POSTGRES_DB=${POSTGRES_DB:-mlflow}
+      - POSTGRES_USER=${POSTGRES_USER:-neurovision}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-neurovision}
+      - POSTGRES_DB=${POSTGRES_DB:-neurovision}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neurovision} -d ${POSTGRES_DB:-neurovision}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - neurovision_network
     restart: unless-stopped
 
   # Apache Airflow - pipeline orchestration
@@ -94,14 +107,20 @@ services:
       - .:/app
     environment:
       - AIRFLOW__CORE__EXECUTOR=${AIRFLOW__CORE__EXECUTOR:-LocalExecutor}
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-neurovision}:${POSTGRES_PASSWORD:-neurovision}@postgres:5432/${POSTGRES_DB:-neurovision}
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
       - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
     depends_on:
-      - postgres
-      - mlflow
+      postgres:
+        condition: service_healthy
+    networks:
+      - neurovision_network
     restart: unless-stopped
+
+networks:
+  neurovision_network:
+    driver: bridge
 
 volumes:
   postgres_data:

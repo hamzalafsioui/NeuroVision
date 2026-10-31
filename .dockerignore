@@ -28,14 +28,15 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Heavy datasets and models (mounted via docker-compose volumes, not built into images)
+data/
+models/
+outputs/
+notebooks/
+*.zip
+*.tar.gz
+.keras/
+
 # Airflow runtime logs
 airflow/logs/
 **/logs/
-
-# Python cache
-__pycache__/
-*.py[cod]
-
-# Local environment and Git
-.env
-.git/

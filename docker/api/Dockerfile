@@ -8,7 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-app.txt .
-RUN pip install --no-cache-dir -r requirements-app.txt
+RUN pip install --no-cache-dir --upgrade pip
 
-COPY . .
+COPY docker/api/requirements.txt requirements.txt
+RUN pip install --no-cache-dir --default-timeout=1000 --retries 10 -r requirements.txt
+
+COPY api/ ./api/
