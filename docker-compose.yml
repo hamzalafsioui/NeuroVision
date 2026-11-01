@@ -95,12 +95,9 @@ services:
     build:
       context: .
       dockerfile: docker/airflow/Dockerfile
-    command: >
-      bash -c "airflow db migrate &&
-               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@neurovision.local &&
-               airflow webserver"
+    command: airflow standalone
     ports:
-      - "${AIRFLOW_PORT:-8080}:8080"
+      - "${AIRFLOW_PORT:-8085}:8080"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -110,6 +107,7 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-neurovision}:${POSTGRES_PASSWORD:-neurovision}@postgres:5432/${POSTGRES_DB:-neurovision}
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__API__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
       - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-http://mlflow:5000}
     depends_on:
       postgres:
